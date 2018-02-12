@@ -8,6 +8,7 @@ import requests
 import json
 import sys
 abuseIPDB_APIKEY = ""
+
 abuseIPDB_days = "60"
 
 def setApiKey(apiKey):

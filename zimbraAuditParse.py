@@ -23,4 +23,3 @@ def parseLine(logLine):
 with open("audit.log") as auditFile:
     for line in auditFile:
         print (parseLine(line))
-        
