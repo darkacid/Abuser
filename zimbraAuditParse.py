@@ -7,6 +7,8 @@ import datetime
 # Pattern definitions
 datePattern = "([0-9:\-\ ,]{23})" #First 23 characters of the log line
 IPPattern = ".*;oip=([0-9.]+);"
+accountPattern = "account=([\w\.\@]+);"
+protocolPattern = "protocol=(soap|imap|pop3)"
 
 def parseDate(logLine):
 
@@ -23,20 +25,46 @@ def parseIP(logLine):
         IPResult=IPResult.group(1)
         return IPResult
     return False
-
+def parseAccount(logline):
+    accountResult = re.search(accountPattern,logline)
+    if (accountResult):
+        accountResult = accountResult.group(1)
+        return accountResult
+    return False
+def parseProtocol(logline):
+    protocolResult = re.search(protocolPattern,logline)
+    if (protocolResult):
+        protocolResult = protocolResult.group(1)
+        if("oproto=smtp" in logline):
+            return "smtp"
+        if (":8080" in logline):
+            return "web"
+        return protocolResult
+    return False
+def parseEventState(logline):
+    if "WARN" in logline:
+        eventState = "fail"
+    else:
+        return "success"
+    if "invalid password" in logline:
+        eventState = "invalid password"
+    return eventState      
 def parseEventType(logline):
     if "oip=" in logline:
-        return True
-    
+        return True    
 
 
 filename = "audit.log"
 with open(filename) as auditFile:
     for line in auditFile:
         if(parseEventType(line)):
-            parsedIP = parseIP(line)
-            print(parsedIP)
             parsedDate = (parseDate(line))
             if(parsedDate > (datetime.datetime.today() - datetime.timedelta(days=30))):
                 pass
-                #print (parsedDate)
+                #print (parsedDate
+            #parsedDate
+            parsedIP = parseIP(line)
+            parsedAccount = parseAccount(line)
+            parsedProtocol = parseProtocol(line)
+            parsedState = parseEventState(line)
+            #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)         
