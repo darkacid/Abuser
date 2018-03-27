@@ -46,13 +46,31 @@ def parseEventState(logline):
         eventState = "fail"
     else:
         return "success"
-    if "invalid password" in logline:
-        eventState = "invalid password"
+    #if "invalid password" in logline:
+    #    eventState = "invalid password"
     return eventState      
 def parseEventType(logline):
     if "oip=" in logline:
         return True    
 
+def blockIP():
+    print("blocked this IP!")
+    pass
+
+eventlist = []
+def eventListOp(parsedIP,parsedAccount,parsedDate):    
+    for account in eventlist:
+        if parsedAccount == account[0]:
+            #If the fail event took place within X minutes (x=5) then block the ip
+            if (datetime.datetime.now() < (account[-1][1])+datetime.timedelta(minutes=5)):
+                blockIP()            
+                account.append((parsedIP,parsedDate))
+            return
+    eventlist.append([parsedAccount,(parsedIP,parsedDate)])
+    print(eventlist)
+
+
+    
 
 filename = "audit.log"
 with open(filename) as auditFile:
@@ -67,4 +85,7 @@ with open(filename) as auditFile:
             parsedAccount = parseAccount(line)
             parsedProtocol = parseProtocol(line)
             parsedState = parseEventState(line)
+            eventListOp(parsedIP,parsedAccount,parsedDate)
+            #if parsedState == "fail":
+            #    eventListOp(parsedIP,parsedAccount,datetime.datetime.today())
             #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)         
