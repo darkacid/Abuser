@@ -22,7 +22,7 @@ def follow(thefile):
         yield line
 
 def readLog():    
-    logfile = open(filename,"r")
+    logfile = open(filename,"r",encoding="utf8")
     loglines = follow(logfile)
     for line in loglines:
         return (line.split('\n')[0])

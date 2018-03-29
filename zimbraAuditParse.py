@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 '''
-In dev...
+Inf dev...
 '''
 import re
 import datetime
 import threading
 import time
+
 import logread
 # Pattern definitions
 datePattern = "([0-9:\-\ ,]{23})" #First 23 characters of the log line
@@ -45,6 +46,9 @@ def parseProtocol(logline):
         return protocolResult
     return False
 def parseEventState(logline):
+    '''
+    Return "success" if user logged in successfully, "fail" otherwise
+    '''
     if "WARN" in logline:
         eventState = "fail"
     else:
@@ -54,18 +58,19 @@ def parseEventState(logline):
     return eventState      
 def parseEventType(logline):
     '''
-    Return True if the line contains user login details
+    Return true if this event regards user login
     '''
     if "oip=" in logline:
-        return True    
+        return True
+    else:
+        return False
 
 def blockIP(ipaddr,blockedDate):
     for blockedIP in config.blockList:
         if blockedIP[0] == ipaddr:
-            config.blockList.remove(blockedIP)            
+            config.blockList.remove(blockedIP)
     config.blockList.append((ipaddr,blockedDate))
-    print("Blocked",ipaddr)
-    log()
+    log("Blocked "+ipaddr)
     #"iptables ...."
     return True
 def unblockIP(ipaddr):
@@ -75,10 +80,30 @@ def unblockIP(ipaddr):
         else:
             print("IP not in blocklist",ipaddr)
             return False
-    print("Unblocked",ipaddr)
-    log()
+    log("Unblocked "+ipaddr)
     #Iptables..
     return True
+def log(inputString,toPrint=False):
+    '''
+    Function to write into a log file (about parser's events).
+    '''
+    if '\n' not in inputString:
+        inputString+='\n'
+
+    currentTime = datetime.datetime.now()
+    currentTime = currentTime.strftime('%Y-%m-%d %H:%M:%S.%f')
+    tail = currentTime[-7:]
+    roundedFloat = round(float(tail), 3)    
+    string =str(roundedFloat)
+    string = string[1:]
+    while len(string) < 4:
+        string+='0'
+    currentTime = currentTime[:-7]
+    currentTime = currentTime+string
+    if toPrint:
+        print(inputString)
+    with open(config.logFilePath,'a') as parserLog:
+        parserLog.write(currentTime+' '+inputString)
 
 class config:
     whitelist=[] #List of IPs not to be blocked at all.
@@ -103,7 +128,11 @@ class config:
     #Once an IP has successfully logged in, add it to recentSuccessList for this many minutes.
     immuneTime = 3600 #Minutes
 
-class ThreadingExample(object):
+    logFilePath = "auditParse.log"
+
+
+
+class BackgroundBlockCheck(object):
     def __init__(self, interval=1):
         self.interval = interval
         thread = threading.Thread(target=self.run, args=())
@@ -122,7 +151,7 @@ class ThreadingExample(object):
                     unblockIP(blocked[0])
             time.sleep(self.interval)
 eventlist = []
-example = ThreadingExample()
+checker = BackgroundBlockCheck()
 def eventListOp(parsedIP,parsedAccount,parsedDate):    
     for account in eventlist:
         if parsedAccount == account[0]:
@@ -166,7 +195,7 @@ while True:
         line = (logread.readLog())
         parseLine(line)
     else:
-        with open(logread.filename) as logfile:
+        with open(logread.filename,encoding="utf8") as logfile:
             for line in logfile:
                 parseLine(line.split('\n')[0])
             done=True
