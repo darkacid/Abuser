@@ -4,6 +4,9 @@ In dev...
 '''
 import re
 import datetime
+import threading
+import time
+import logread
 # Pattern definitions
 datePattern = "([0-9:\-\ ,]{23})" #First 23 characters of the log line
 IPPattern = ".*;oip=([0-9.]+);"
@@ -53,39 +56,99 @@ def parseEventType(logline):
     if "oip=" in logline:
         return True    
 
-def blockIP():
-    print("blocked this IP!")
-    pass
+def blockIP(ipaddr,blockedDate):
+    config.blockList.append((ipaddr,blockedDate))
+    print("Blocked",ipaddr)
+    #"iptables ...."
+    return True
+def unblockIP(ipaddr):
+    for blockedIP in config.blockList:
+        if blockedIP[0] == ipaddr:
+            config.blockList.remove(blockedIP)
+        else:
+            print("IP not in blocklist...")
+            return False
+    print("Unblocked",ipaddr)
+    #Iptables..
+    return True
 
+class config:
+    whitelist=[] #List of IPs not to be blocked at all.
+    recentSuccessList = [] #List of IPs that recently logged in successfully.
+    blockList = [] #List of currently blocked IPs.
+
+    #If an IP fail to login to an account within this time period from one another -> block IP.
+    recentFailInterval = 15 #Minutes
+
+    #If an IP successfully logged in to an account add this IP to "recentSuccessList" for "recentLoginInterval" minutes.
+    recentLoginInterval = 5 #Minutes
+
+    #If an IP is blocked, unblock  "blockInterval" minutes later.
+    blockInterval = 5 #Minutes
+
+class ThreadingExample(object):
+    def __init__(self, interval=1):
+        self.interval = interval
+        thread = threading.Thread(target=self.run, args=())
+        thread.daemon = True
+        thread.start()
+    def run(self):
+        while True:
+            #If its time to unblock IP. unblock it
+            for blocked in config.blockList:
+                if (datetime.datetime.now() < (blocked[1])+datetime.timedelta(minutes= config.blockInterval)):
+                    #Block time hasn't expired
+                    print("Still blocked..")
+                else:
+                    #Block time expired
+                    unblockIP(blocked[0])
+            time.sleep(self.interval)
 eventlist = []
+example = ThreadingExample()
 def eventListOp(parsedIP,parsedAccount,parsedDate):    
     for account in eventlist:
         if parsedAccount == account[0]:
             #If the fail event took place within X minutes (x=5) then block the ip
-            if (datetime.datetime.now() < (account[-1][1])+datetime.timedelta(minutes=5)):
-                blockIP()            
+            if (datetime.datetime.now() < (account[-1][1])+datetime.timedelta(minutes=config.recentFailInterval)):
+                blockIP(parsedIP,parsedDate)
+                account.append((parsedIP,parsedDate))
+            else:
                 account.append((parsedIP,parsedDate))
             return
     eventlist.append([parsedAccount,(parsedIP,parsedDate)])
     print(eventlist)
 
 
-    
 
+blockIP("1.1.1.1",datetime.datetime.now())
+
+while True:
+    logread.readLog()
+'''
 filename = "audit.log"
 with open(filename) as auditFile:
-    for line in auditFile:
-        if(parseEventType(line)):
-            parsedDate = (parseDate(line))
-            if(parsedDate > (datetime.datetime.today() - datetime.timedelta(days=30))):
-                pass
-                #print (parsedDate
-            #parsedDate
-            parsedIP = parseIP(line)
-            parsedAccount = parseAccount(line)
-            parsedProtocol = parseProtocol(line)
-            parsedState = parseEventState(line)
-            eventListOp(parsedIP,parsedAccount,parsedDate)
-            #if parsedState == "fail":
-            #    eventListOp(parsedIP,parsedAccount,datetime.datetime.today())
-            #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)         
+    firstline=""
+    while True:
+        for line in auditFile:
+            if line==lastline:
+                time.sleep(1)
+                break
+            if(parseEventType(line)):
+                parsedDate = (parseDate(line))
+                if(parsedDate > (datetime.datetime.today() - datetime.timedelta(days=30))):
+                    pass
+                    #print (parsedDate
+                #parsedDate
+                parsedIP = parseIP(line)
+                parsedAccount = parseAccount(line)
+                parsedProtocol = parseProtocol(line)
+                parsedState = parseEventState(line)
+                if(parsedState=="fail"):
+                    if(parsedAccount =="somedomain"):
+                        eventListOp(parsedIP,parsedAccount,parsedDate)
+                #if parsedState == "fail":
+                #    eventListOp(parsedIP,parsedAccount,datetime.datetime.today())
+                #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)
+                lastline=line
+                print(line)
+'''
