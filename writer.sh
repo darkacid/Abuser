@@ -2,4 +2,4 @@
 while true; do
   echo "0"
   sleep 1
-done > auditer.log
+done >> auditer.log

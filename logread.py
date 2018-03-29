@@ -3,7 +3,10 @@
 import time
 import os
 
-filename = "auditer.log"
+try :
+    filename
+except:
+    filename = "auditer.log"
 statinfo = os.stat(filename)
 startSize = statinfo.st_size
 def follow(thefile):
@@ -22,4 +25,4 @@ def readLog():
     logfile = open(filename,"r")
     loglines = follow(logfile)
     for line in loglines:
-        print (line)
+        return (line.split('\n')[0])
