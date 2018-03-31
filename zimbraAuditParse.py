@@ -15,7 +15,9 @@ accountPattern = "account=([\w\.\@]+);"
 protocolPattern = "protocol=(soap|imap|pop3)"
 
 def parseDate(logLine):
-
+    '''
+    Given a log line returns a datetime object.
+    '''
     dateResult = re.search(datePattern,logLine)
     if(dateResult):
         eventDateStr = dateResult.group(1)
@@ -24,18 +26,27 @@ def parseDate(logLine):
     else:
         return False
 def parseIP(logLine):
+    '''
+    Given a log line returns event IP.
+    '''
     IPResult = re.search(IPPattern,logLine)
     if (IPResult):
         IPResult=IPResult.group(1)
         return IPResult
     return False
 def parseAccount(logline):
+    '''
+    Given a log line returns event account name.
+    '''
     accountResult = re.search(accountPattern,logline)
     if (accountResult):
         accountResult = accountResult.group(1)
         return accountResult
     return False
 def parseProtocol(logline):
+    '''
+    Given a log line returns event protocol.
+    '''
     protocolResult = re.search(protocolPattern,logline)
     if (protocolResult):
         protocolResult = protocolResult.group(1)
@@ -58,7 +69,7 @@ def parseEventState(logline):
     return eventState      
 def parseEventType(logline):
     '''
-    Return true if this event regards user login
+    Return true if this event regards user login.
     '''
     if "oip=" in logline:
         return True
@@ -83,6 +94,15 @@ def unblockIP(ipaddr):
     log("Unblocked "+ipaddr)
     #Iptables..
     return True
+def checkBlock(ipaddr):
+    '''
+    Checks if a given IP address is in a blocked state.
+    '''
+    for blockedIP in config.blockList:
+        if blockedIP[0] ==ipaddr:
+            return True
+    return False
+    #Iptables..
 def log(inputString,toPrint=False):
     '''
     Function to write into a log file (about parser's events).
@@ -128,7 +148,9 @@ class config:
     #Once an IP has successfully logged in, add it to recentSuccessList for this many minutes.
     immuneTime = 3600 #Minutes
 
-    logFilePath = "auditParse.log"
+    outputLogFilePath = "auditParse.log"
+
+    iptablesChain = "auditParser" #Name of the iptables chain name
 
 
 
@@ -153,6 +175,9 @@ class BackgroundBlockCheck(object):
 eventlist = []
 checker = BackgroundBlockCheck()
 def eventListOp(parsedIP,parsedAccount,parsedDate):    
+    '''
+    $$$ Adds an IP to recentEventList upon failure to login.
+    '''
     for account in eventlist:
         if parsedAccount == account[0]:
             #If the fail event took place within recentFailInterval then block the ip
@@ -169,8 +194,8 @@ def parseLine(line):
     if(parseEventType(line)):
         parsedDate = (parseDate(line))
         if(parsedDate > (datetime.datetime.today() - datetime.timedelta(days=30))):
+            #If the date in the event is within a 30 day timeframe from today...
             pass
-            #print (parsedDat
         #parsedDate
         parsedIP = parseIP(line)
         parsedAccount = parseAccount(line)
@@ -183,13 +208,12 @@ def parseLine(line):
         #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)
         #print(line)
 
-
+#Testing the blockIP function
 #blockIP("1.1.1.1",datetime.datetime.now())
 
 logread.filename = "auditer.log"
 
-#Change value to True, when initially finished reading from log file
-done=False
+done=False #Change value to True, when initially finished reading from log file.
 while True:
     if done:
         line = (logread.readLog())
@@ -200,4 +224,6 @@ while True:
                 parseLine(line.split('\n')[0])
             done=True
             print(config.blockList)
-#Rename eventList to recentFailList
+#TODO:
+    #Rename eventList to recentFailList
+    #$$$ Write proper comments.
