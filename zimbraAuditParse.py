@@ -6,6 +6,7 @@ import re
 import datetime
 import threading
 import time
+import os
 
 import logread
 # Pattern definitions
@@ -81,7 +82,7 @@ def blockIP(ipaddr,blockedDate):
         if blockedIP[0] == ipaddr:
             config.blockList.remove(blockedIP)
     config.blockList.append((ipaddr,blockedDate))
-    log("Blocked "+ipaddr)
+    log("Blocked "+ipaddr,toPrint=config.printEvents)
     #"iptables ...."
     return True
 def unblockIP(ipaddr):
@@ -91,7 +92,7 @@ def unblockIP(ipaddr):
         else:
             print("IP not in blocklist",ipaddr)
             return False
-    log("Unblocked "+ipaddr)
+    log("Unblocked "+ipaddr,toPrint=config.printEvents)
     #Iptables..
     return True
 def checkBlock(ipaddr):
@@ -103,6 +104,11 @@ def checkBlock(ipaddr):
             return True
     return False
     #Iptables..
+def checkRecentFailList(ipaddr):
+    '''
+    Check if resetFailInterval expired for an IP in recentFailList.
+    '''
+    return True
 def log(inputString,toPrint=False):
     '''
     Function to write into a log file (about parser's events).
@@ -122,13 +128,26 @@ def log(inputString,toPrint=False):
     currentTime = currentTime+string
     if toPrint:
         print(inputString)
-    with open(config.logFilePath,'a') as parserLog:
+    with open(config.outputLogFilePath,'a') as parserLog:
         parserLog.write(currentTime+' '+inputString)
 
 class config:
+    def readConfigFile(self):
+        pass
+    def __init__(self):
+        self.readConfigFile()
+        log("Launch")
+
+    '''
+    Config file default values
+    '''
+
     whitelist=[] #List of IPs not to be blocked at all.
     recentSuccessList = [] #List of IPs that recently logged in successfully.
     blockList = [] #List of currently blocked IPs.
+
+    #Background check if block time has expired.
+    checkInterval = 1 #Seconds
 
     #If an IP fail to login to an account within this time period from one another -> block IP.
     recentFailInterval = 15 #Minutes
@@ -136,7 +155,7 @@ class config:
     #Once a recent fail is registered, it will be unregistered after this time period.
     resetFailInterval = 60 #Minutes
 
-    #If multiple IPs fail to login to an account 
+    #$$$ (Amount of times it takes to fail login for subsequent fail IPs to be blocked)If multiple IPs fail to login to an account 
     recentFailCount = 3 #Times
 
     #If an IP successfully logged in to an account add this IP to "recentSuccessList" for "recentLoginInterval" minutes.
@@ -148,10 +167,17 @@ class config:
     #Once an IP has successfully logged in, add it to recentSuccessList for this many minutes.
     immuneTime = 3600 #Minutes
 
+    #Path to the log file where parser's output is written
     outputLogFilePath = "auditParse.log"
 
+    #Path to parser's config file
+    parserConfigFilePath = "parser.config"
+    
+    #Name of the iptables chain where the blocking action will occur
     iptablesChain = "auditParser" #Name of the iptables chain name
-
+    
+    #Whether or not to print events to the console once they are logged to parser's log file.
+    printEvents = True #Prints output log events to console
 
 
 class BackgroundBlockCheck(object):
@@ -172,14 +198,23 @@ class BackgroundBlockCheck(object):
                     #Block time expired
                     unblockIP(blocked[0])
             time.sleep(self.interval)
-eventlist = []
-checker = BackgroundBlockCheck()
+config() #Load script configuration
+recentFailList = []
+checker = BackgroundBlockCheck(interval = config.checkInterval) #Start background thread
 def eventListOp(parsedIP,parsedAccount,parsedDate):    
     '''
-    $$$ Adds an IP to recentEventList upon failure to login.
+    Adds an IP to recentEventList upon failure to login. Checks if multiple (recentFailCount) IPs access same account.
     '''
-    for account in eventlist:
+    for account in recentFailList :
         if parsedAccount == account[0]:
+            account.append((parsedIP,parsedDate))
+            #checkRecentFailList()
+            if len(account) >= config.recentFailCount+1:
+                #if others in faillist arent blocked -> block them
+                for event in account[1:]:
+                    if not checkBlock(event[0]): #event[0] is an IP; event[1] the date when a login fail occured
+                        blockIP(event[0],event[1])
+            '''
             #If the fail event took place within recentFailInterval then block the ip
             if (datetime.datetime.now() < (account[-1][1])+datetime.timedelta(minutes=config.recentFailInterval)):
                 blockIP(parsedIP,parsedDate)
@@ -187,8 +222,10 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
             else:
                 account.append((parsedIP,parsedDate))
             return
-    eventlist.append([parsedAccount,(parsedIP,parsedDate)])
-    #print(eventlist)
+            '''
+        else:
+            recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
+    #print(recentFailList)
 
 def parseLine(line):
     if(parseEventType(line)):
@@ -198,6 +235,8 @@ def parseLine(line):
             pass
         #parsedDate
         parsedIP = parseIP(line)
+        if (parsedIP in config.whitelist) or (parsedIP in config.recentSuccessList):
+            return
         parsedAccount = parseAccount(line)
         parsedProtocol = parseProtocol(line)
         parsedState = parseEventState(line)
@@ -223,7 +262,8 @@ while True:
             for line in logfile:
                 parseLine(line.split('\n')[0])
             done=True
-            print(config.blockList)
+            print("Initial log read completed")
+            print (config.blockList)
 #TODO:
     #Rename eventList to recentFailList
     #$$$ Write proper comments.
