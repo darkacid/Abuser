@@ -7,12 +7,14 @@ import datetime
 import threading
 import time
 import os
+import json
 
 import logread
+import abuseipdbCheck
 # Pattern definitions
 datePattern = "([0-9:\-\ ,]{23})" #First 23 characters of the log line
 IPPattern = ".*;oip=([0-9.]+);"
-accountPattern = "account=([\w\.\@]+);"
+accountPattern = "account=([^\;]*);"
 protocolPattern = "protocol=(soap|imap|pop3)"
 
 def parseDate(logLine):
@@ -77,31 +79,57 @@ def parseEventType(logline):
     else:
         return False
 
-def blockIP(ipaddr,blockedDate):
-    for blockedIP in config.blockList:
-        if blockedIP[0] == ipaddr:
-            config.blockList.remove(blockedIP)
+def parseFailHandle(logline,parsedAccount,parsedIP,parsedDate):
+    '''
+    Handler for incorrect regex parsers.
+    '''
+    if type(parsedAccount) !=str:
+        print(type(parsedAccount))
+        log("ERROR:Account parse failed; "+logline,toPrint=config.printEvents)
+        return False
+    if type(parsedIP) !=str:
+        log("ERROR:IP parse failed; "+logline,toPrint=config.printEvents)
+        return False
+    if type(parsedDate) !=datetime.datetime:
+        log("ERROR:Date parse failed; "+logline,toPrint=config.printEvents)
+        return False
+    return True
+
+def blockIP(ipaddr,blockedDate,account):
+    '''
+    Blocks a given IP address (adds to iptables)
+    Adds the IP to a blocklist with a date
+    Prints the name of account for which it was banned
+    '''
+    ipaddrTuple = checkBlock(ipaddr)
+    if (ipaddrTuple):
+        config.blockList.remove(ipaddrTuple)
     config.blockList.append((ipaddr,blockedDate))
-    log("Blocked "+ipaddr,toPrint=config.printEvents)
+    log("Blocked "+ipaddr+" for "+account,toPrint=config.printEvents)
     #"iptables ...."
     return True
 def unblockIP(ipaddr):
-    for blockedIP in config.blockList:
-        if blockedIP[0] == ipaddr:
-            config.blockList.remove(blockedIP)
-        else:
-            print("IP not in blocklist",ipaddr)
-            return False
-    log("Unblocked "+ipaddr,toPrint=config.printEvents)
+    '''
+    Removes an IP from blocklist and removes its rule from iptables.
+    '''
+    ipaddrTuple = checkBlock(ipaddr)
+    if(ipaddrTuple):
+        config.blockList.remove(ipaddrTuple)
+        log("Unblocked "+ipaddr,toPrint=config.printEvents)
+        return True
+    else:
+        print("IP not in blocklist",ipaddr)
+        return False
     #Iptables..
     return True
 def checkBlock(ipaddr):
     '''
     Checks if a given IP address is in a blocked state.
+    Returns a tuple of form (str(ipaddr), datetime(blockedDate)).
     '''
     for blockedIP in config.blockList:
         if blockedIP[0] ==ipaddr:
-            return True
+            return blockedIP
     return False
     #Iptables..
 def checkRecentFailList(ipaddr):
@@ -132,7 +160,18 @@ def log(inputString,toPrint=False):
         parserLog.write(currentTime+' '+inputString)
 
 class config:
-    def readConfigFile(self):
+    def readConfigFile(self):        
+        if os.path.exists(self.parserConfigFilePath):
+            with open(self.parserConfigFilePath, 'r') as f:
+                configfile = json.load(f)
+                if(configfile["whitelist"]):
+                    print(type(configfile["whitelist"]))
+                    self.whitelist+= configfile["whitelist"]
+        else:
+            configfile = {"whitelist": [], 'key2': 'value2'}
+            with open(self.parserConfigFilePath, 'w') as f:
+                json.dump(configfile, f)
+    def __importJson(self):
         pass
     def __init__(self):
         self.readConfigFile()
@@ -171,7 +210,7 @@ class config:
     outputLogFilePath = "auditParse.log"
 
     #Path to parser's config file
-    parserConfigFilePath = "parser.config"
+    parserConfigFilePath = "parser.conf"
     
     #Name of the iptables chain where the blocking action will occur
     iptablesChain = "auditParser" #Name of the iptables chain name
@@ -213,7 +252,8 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
                 #if others in faillist arent blocked -> block them
                 for event in account[1:]:
                     if not checkBlock(event[0]): #event[0] is an IP; event[1] the date when a login fail occured
-                        blockIP(event[0],event[1])
+                        blockIP(event[0],event[1],parsedAccount)
+                        return
             '''
             #If the fail event took place within recentFailInterval then block the ip
             if (datetime.datetime.now() < (account[-1][1])+datetime.timedelta(minutes=config.recentFailInterval)):
@@ -223,32 +263,34 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
                 account.append((parsedIP,parsedDate))
             return
             '''
-        else:
-            recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
-    #print(recentFailList)
+    else:
+        recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
 
 def parseLine(line):
     if(parseEventType(line)):
-        parsedDate = (parseDate(line))
-        if(parsedDate > (datetime.datetime.today() - datetime.timedelta(days=30))):
-            #If the date in the event is within a 30 day timeframe from today...
-            pass
-        #parsedDate
-        parsedIP = parseIP(line)
-        if (parsedIP in config.whitelist) or (parsedIP in config.recentSuccessList):
-            return
-        parsedAccount = parseAccount(line)
-        parsedProtocol = parseProtocol(line)
         parsedState = parseEventState(line)
         if(parsedState=="fail"):
-            eventListOp(parsedIP,parsedAccount,parsedDate)
-        #if parsedState == "fail":
-        #    eventListOp(parsedIP,parsedAccount,datetime.datetime.today())
-        #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)
-        #print(line)
+            parsedDate = (parseDate(line))
+            if(parsedDate > (datetime.datetime.today() - datetime.timedelta(days=30))):
+                #If the date in the event is within a 30 day timeframe from today...
+                pass
+            parsedIP = parseIP(line)
+            if (parsedIP in config.whitelist) or (parsedIP in config.recentSuccessList):
+                return
+            parsedAccount = parseAccount(line)
+            #parsedProtocol = parseProtocol(line)
+            if not parseFailHandle(line,parsedAccount,parsedIP,parsedDate):
+                return False
+            if not checkBlock(parsedIP):#Ignore line if the IP is already blocked
+                eventListOp(parsedIP,parsedAccount,parsedDate)
+            #if parsedState == "fail":
+            #    eventListOp(parsedIP,parsedAccount,datetime.datetime.today())
+            #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)
+            #print(line)
+    return True
 
 #Testing the blockIP function
-#blockIP("1.1.1.1",datetime.datetime.now())
+#blockIP("1.1.1.1",datetime.datetime.now(),"admin@domain.tek")
 
 logread.filename = "auditer.log"
 
@@ -262,8 +304,9 @@ while True:
             for line in logfile:
                 parseLine(line.split('\n')[0])
             done=True
-            print("Initial log read completed")
+            log("Initial log read completed",toPrint=config.printEvents)
             print (config.blockList)
 #TODO:
-    #Rename eventList to recentFailList
     #$$$ Write proper comments.
+    #Improve config file reader function.
+    #Improve logic for recentFailList
