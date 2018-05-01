@@ -132,10 +132,19 @@ def checkBlock(ipaddr):
             return blockedIP
     return False
     #Iptables..
-def checkRecentFailList(ipaddr):
+def checkRecentFailList():
     '''
-    Check if resetFailInterval expired for an IP in recentFailList.
+    Check if resetFailInterval expired for recentFailList.
     '''
+    if len (recentFailList) == 0:
+        return False
+    for account in recentFailList:
+        eventTuple = account[1]
+        if (datetime.datetime.now() >= (eventTuple[1])+datetime.timedelta(minutes= config.resetFailInterval)):
+            account.remove(eventTuple)
+            #log("Cleaned: "+account[0],toPrint=True)
+            if len(account) == 1 :
+                recentFailList.remove(account)
     return True
 def log(inputString,toPrint=False):
     '''
@@ -185,11 +194,11 @@ class config:
     recentSuccessList = [] #List of IPs that recently logged in successfully.
     blockList = [] #List of currently blocked IPs.
 
-    #Background check if block time has expired.
+    #Background check whether block time has expired.
     checkInterval = 1 #Seconds
 
     #If an IP fail to login to an account within this time period from one another -> block IP.
-    recentFailInterval = 15 #Minutes
+    #recentFailInterval = 15 #Minutes
 
     #Once a recent fail is registered, it will be unregistered after this time period.
     resetFailInterval = 60 #Minutes
@@ -198,7 +207,7 @@ class config:
     recentFailCount = 3 #Times
 
     #If an IP successfully logged in to an account add this IP to "recentSuccessList" for "recentLoginInterval" minutes.
-    recentLoginInterval = 5 #Minutes
+    #recentLoginInterval = 5 #Minutes
 
     #If an IP is blocked, unblock  "blockInterval" minutes later.
     blockInterval = 5 #Minutes
@@ -236,6 +245,7 @@ class BackgroundBlockCheck(object):
                 else:
                     #Block time expired
                     unblockIP(blocked[0])
+            checkRecentFailList()
             time.sleep(self.interval)
 config() #Load script configuration
 recentFailList = []
@@ -244,6 +254,9 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
     '''
     Adds an IP to recentEventList upon failure to login. Checks if multiple (recentFailCount) IPs access same account.
     '''
+    if len (recentFailList) == 0:
+        recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
+        return
     for account in recentFailList :
         if parsedAccount == account[0]:
             account.append((parsedIP,parsedDate))
@@ -254,15 +267,6 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
                     if not checkBlock(event[0]): #event[0] is an IP; event[1] the date when a login fail occured
                         blockIP(event[0],event[1],parsedAccount)
                         return
-            '''
-            #If the fail event took place within recentFailInterval then block the ip
-            if (datetime.datetime.now() < (account[-1][1])+datetime.timedelta(minutes=config.recentFailInterval)):
-                blockIP(parsedIP,parsedDate)
-                account.append((parsedIP,parsedDate))
-            else:
-                account.append((parsedIP,parsedDate))
-            return
-            '''
     else:
         recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
 
@@ -305,8 +309,6 @@ while True:
                 parseLine(line.split('\n')[0])
             done=True
             log("Initial log read completed",toPrint=config.printEvents)
-            print (config.blockList)
+            print ("Blocklist: ", config.blockList)
 #TODO:
-    #$$$ Write proper comments.
     #Improve config file reader function.
-    #Improve logic for recentFailList
