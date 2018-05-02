@@ -2,8 +2,8 @@
 
 import time
 import os
-import config
-
+from config import config
+config = config()
 try :
     filename = config.logreadFilename
 except:

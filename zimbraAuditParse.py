@@ -188,7 +188,7 @@ class BackgroundBlockCheck(object):
                     unblockIP(blocked[0])
             checkRecentFailList()
             time.sleep(self.interval)
-config() #Load script configuration
+config = config() #Load script configuration
 recentFailList = []
 checker = BackgroundBlockCheck(interval = config.checkInterval) #Start background thread
 log("Launch")
@@ -228,6 +228,7 @@ def parseLine(line):
             if not parseFailHandle(line,parsedAccount,parsedIP,parsedDate):
                 return False
             if not checkBlock(parsedIP):#Ignore line if the IP is already blocked
+                log ("Failed "+parsedIP+" for "+parsedAccount,toPrint=config.printEvents)
                 eventListOp(parsedIP,parsedAccount,parsedDate)
             #if parsedState == "fail":
             #    eventListOp(parsedIP,parsedAccount,datetime.datetime.today())

@@ -1,15 +1,37 @@
 import os
 import json
 class config:
-    def readConfigFile(self):        
+    def readConfigFile(self):
         if os.path.exists(self.parserConfigFilePath):
             with open(self.parserConfigFilePath, 'r') as f:
                 configfile = json.load(f)
                 if(configfile["whitelist"]):
-                    print(type(configfile["whitelist"]))
                     self.whitelist+= configfile["whitelist"]
+                if(configfile["blockList"]):
+                    self.blockList = configfile["blockList"]
+                if(configfile["checkInterval"]):
+                    self.checkInterval = configfile["checkInterval"]
+                if(configfile["resetFailInterval"]):
+                    self.resetFailInterval = configfile["resetFailInterval"]
+                if(configfile["recentFailCount"]):
+                    self.recentFailCount = configfile["recentFailCount"]
+                if(configfile["blockInterval"]):
+                    self.blockInterval = configfile["blockInterval"]
+                if(configfile["immuneTime"]):
+                    self.immuneTime = configfile["immuneTime"]
+                if(configfile["outputLogFilePath"]):
+                    self.outputLogFilePath = configfile["outputLogFilePath"]
+                if(configfile["logreadFilename"]):
+                    self.logreadFilename = configfile["logreadFilename"]
+                if(configfile["iptablesChain"]):
+                    self.iptablesChain = configfile["iptablesChain"]
+                if(configfile["printEvents"]):
+                    self.printEvents = configfile["printEvents"]                
         else:
-            configfile = {"whitelist": [], 'key2': 'value2'}
+            configfile ={
+            "whitelist": [], 'checkInterval': '','blockList' : '','checkInterval': '',
+            'resetFailInterval': '','recentFailCount':'','blockInterval':'','immuneTime':'',
+            'outputLogFilePath': '','logreadFilename':'','iptablesChain':'','printEvents':''}
             with open(self.parserConfigFilePath, 'w') as f:
                 json.dump(configfile, f)
     def __importJson(self):
@@ -51,7 +73,7 @@ class config:
     
     #Path to the audit log file
     logreadFilename = "audit.log"
-    
+
     #Path to parser's config file
     parserConfigFilePath = "parser.conf"
     
