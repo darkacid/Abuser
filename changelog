@@ -1,0 +1,5 @@
+Notable changes
+1) Added parseFailHandle() to handle parsing errors.
+2) Added readConfigFile() to read configuration from file (json format).
+3) Modified logic for blockIP() and unblockIP().
+4) Minor changes.
