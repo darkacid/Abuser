@@ -2,11 +2,13 @@
 
 import time
 import os
+import config
 
 try :
-    filename
+    filename = config.logreadFilename
 except:
-    filename = "auditer.log"
+    print ("Logreader filename cannot be set!")
+    exit()
 statinfo = os.stat(filename)
 startSize = statinfo.st_size
 def follow(thefile):
