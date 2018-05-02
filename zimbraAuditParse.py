@@ -67,9 +67,17 @@ def parseEventState(logline):
     if "WARN" in logline:
         eventState = "fail"
     else:
-        return "success"
-    #if "invalid password" in logline:
-    #    eventState = "invalid password"
+        #Ignore zimbra inner account
+        if "account=zimbra;" in logline:
+            return
+        successPattern = "protocol=(imap|pop3|soap);$"
+        successResult = re.search(successPattern,logline)
+        if (successResult):
+            successResult = successResult.group(1)
+            return "success"
+        elif "account=zimbra;" in logline:
+            return
+        eventState=False
     return eventState      
 def parseEventType(logline):
     '''
@@ -212,6 +220,10 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
     else:
         recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
 
+def eventSuccessOp():
+    #implement AbuseIPDB checks
+    pass
+
 def parseLine(line):
     if(parseEventType(line)):
         parsedState = parseEventState(line)
@@ -230,10 +242,13 @@ def parseLine(line):
             if not checkBlock(parsedIP):#Ignore line if the IP is already blocked
                 log ("Failed "+parsedIP+" for "+parsedAccount,toPrint=config.printEvents)
                 eventListOp(parsedIP,parsedAccount,parsedDate)
-            #if parsedState == "fail":
-            #    eventListOp(parsedIP,parsedAccount,datetime.datetime.today())
-            #print(parsedDate,parsedIP,parsedAccount,parsedProtocol,parsedState)
-            #print(line)
+        elif parsedState =="success":
+            eventSuccessOp()
+        else:
+            log(line,toPrint=config.printEvents)
+            log(parsedState,toPrint=config.printEvents)
+            log("ERROR: eventType parse failed",toPrint=config.printEvents)
+            exit()
     return True
 
 #Testing the blockIP function
@@ -253,4 +268,5 @@ while True:
             log("Initial log read completed",toPrint=config.printEvents)
             print ("Blocklist: ", config.blockList)
 #TODO:
-    #Improve config file reader function.
+    #Add functionality for email notification.
+    #Improve parsers.
