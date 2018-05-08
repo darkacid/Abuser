@@ -7,10 +7,10 @@ import datetime
 import threading
 import time
 import os
-import json
+import signal
 
-from logread import logread
 import abuseipdbCheck
+from logread import logread
 from config import config
 from iptables import iptables
 # Pattern definitions
@@ -118,7 +118,6 @@ def blockIP(ipaddr,blockedDate,account):
     log("Blocked "+ipaddr+" for "+account,toPrint=config.printEvents)
     iptables.block(ipaddr)
     time.sleep(0.02)
-    #"iptables ...."
     return True
 def unblockIP(ipaddr):
     '''
@@ -134,7 +133,6 @@ def unblockIP(ipaddr):
         return False
     iptables.unblock(ipaddr)
     time.sleep(0.02)
-    #Iptables..
     return True
 def checkBlock(ipaddr):
     '''
@@ -259,25 +257,29 @@ def parseLine(line):
             exit()
     return True
 
-#Testing the blockIP function
-#blockIP("1.1.1.1",datetime.datetime.now(),"admin@domain.tek")
+def signal_handler(signal, frame):
+    global logread
+    global iptables
+    global checker
+    del iptables
+    del logread
+    del checker
+    exit()
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
-try:
-
-    done=False #Change value to True, when initially finished reading from log file.
-    while True:
-        if done:
-            line = (logread.readLog())
-            parseLine(line)
-        else:
-            with open(config.logreadFilename,encoding="utf8") as logfile:
-                for line in logfile:
-                    parseLine(line.split('\n')[0])
-                done=True
-                log("Initial log read completed",toPrint=config.printEvents)
-                print ("Blocklist: ", config.blockList)
-except KeyboardInterrupt:
-    print ("Keyboard Interrupt")
+done=False #Change value to True, when initially finished reading from log file.
+while True:
+    if done:
+        line = (logread.readLog())
+        parseLine(line)
+    else:
+        with open(config.logreadFilename,encoding="utf8") as logfile:
+            for line in logfile:
+                parseLine(line.split('\n')[0])
+            done=True
+            log("Initial log read completed",toPrint=config.printEvents)
+            print ("Blocklist: ", config.blockList)
 #TODO:
     #Add functionality for email notification.
     #Improve parsers.
