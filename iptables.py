@@ -11,9 +11,12 @@ class   iptables:
         '''
         Catches errors by the iptables subprocess calls.
         '''
+        if "xtables lock. " in call_output[1].decode():
+            return False
+
         if (proc_call.returncode !=0):
             self.moduleOutput(call_output[0].decode()+call_output[1].decode())
-        return
+        return True
     def moduleOutput(self,message):
         '''
         Returns error messages to parent module
@@ -21,12 +24,15 @@ class   iptables:
         message="IPTables# " + message
         raise Exception(message)
     def __init__(self,iptablesChain):
-        if not (os.getuid() == 0):
-           self.moduleOutput("Not executed as root")
+        self.checkRoot()
         self.iptablesChain = iptablesChain
         self.createChain()
     def __del__(self):
+        self.checkRoot()
         self.delChain()
+    def checkRoot(self):
+        if not (os.getuid() == 0):
+           self.moduleOutput("Not executed as root")
     def createChain(self):
         '''
         Creates the IPtables chain.
@@ -74,7 +80,8 @@ class   iptables:
         '''
         proc_call = subprocess.Popen(actionstring, stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True)
         output = proc_call.communicate()
-        self.failHandle(proc_call,output)
+        if not self.failHandle(proc_call,output):
+            self.iptablesExecute(actionstring)
         return output
     def block(self,ipaddr):
         ipaddr+="/32"

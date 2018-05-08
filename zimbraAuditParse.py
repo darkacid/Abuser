@@ -9,9 +9,10 @@ import time
 import os
 import json
 
-import logread
+from logread import logread
 import abuseipdbCheck
 from config import config
+from iptables import iptables
 # Pattern definitions
 datePattern = "([0-9:\-\ ,]{23})" #First 23 characters of the log line
 IPPattern = ".*;oip=([0-9.]+);"
@@ -115,6 +116,8 @@ def blockIP(ipaddr,blockedDate,account):
         config.blockList.remove(ipaddrTuple)
     config.blockList.append((ipaddr,blockedDate))
     log("Blocked "+ipaddr+" for "+account,toPrint=config.printEvents)
+    iptables.block(ipaddr)
+    time.sleep(0.02)
     #"iptables ...."
     return True
 def unblockIP(ipaddr):
@@ -129,6 +132,8 @@ def unblockIP(ipaddr):
     else:
         print("IP not in blocklist",ipaddr)
         return False
+    iptables.unblock(ipaddr)
+    time.sleep(0.02)
     #Iptables..
     return True
 def checkBlock(ipaddr):
@@ -197,6 +202,9 @@ class BackgroundBlockCheck(object):
             checkRecentFailList()
             time.sleep(self.interval)
 config = config() #Load script configuration
+iptables = iptables(config.iptablesChain)
+logread = logread()
+logread.init(config.logreadFilename)
 recentFailList = []
 checker = BackgroundBlockCheck(interval = config.checkInterval) #Start background thread
 log("Launch")
@@ -254,19 +262,22 @@ def parseLine(line):
 #Testing the blockIP function
 #blockIP("1.1.1.1",datetime.datetime.now(),"admin@domain.tek")
 
+try:
 
-done=False #Change value to True, when initially finished reading from log file.
-while True:
-    if done:
-        line = (logread.readLog())
-        parseLine(line)
-    else:
-        with open(logread.filename,encoding="utf8") as logfile:
-            for line in logfile:
-                parseLine(line.split('\n')[0])
-            done=True
-            log("Initial log read completed",toPrint=config.printEvents)
-            print ("Blocklist: ", config.blockList)
+    done=False #Change value to True, when initially finished reading from log file.
+    while True:
+        if done:
+            line = (logread.readLog())
+            parseLine(line)
+        else:
+            with open(config.logreadFilename,encoding="utf8") as logfile:
+                for line in logfile:
+                    parseLine(line.split('\n')[0])
+                done=True
+                log("Initial log read completed",toPrint=config.printEvents)
+                print ("Blocklist: ", config.blockList)
+except KeyboardInterrupt:
+    print ("Keyboard Interrupt")
 #TODO:
     #Add functionality for email notification.
     #Improve parsers.
