@@ -16,10 +16,9 @@ class logread:
         self.startSize = statinfo.st_size
     def follow(self,thefile):
         thefile.seek(0,2)
-        while True:
+        while True:     
             if self.startSize > os.stat(self.logreadFilename).st_size:
-                print ("file rotated")
-                exit()
+                return None
             line = thefile.readline()
             if not line:
                 time.sleep(0.1)

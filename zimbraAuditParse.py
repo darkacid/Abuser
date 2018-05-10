@@ -222,7 +222,6 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
                 for event in account[1:]:
                     if not checkBlock(event[0]): #event[0] is an IP; event[1] the date when a login fail occured
                         blockIP(event[0],event[1],parsedAccount)
-                        return
     else:
         recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
 
@@ -256,8 +255,7 @@ def parseLine(line):
             log("ERROR: eventType parse failed",toPrint=config.printEvents)
             exit()
     return True
-
-def signal_handler(signal, frame):
+def graceful_exit():
     global logread
     global iptables
     global checker
@@ -265,13 +263,19 @@ def signal_handler(signal, frame):
     del logread
     del checker
     exit()
+def signal_handler(signal, frame):
+    graceful_exit()
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 done=False #Change value to True, when initially finished reading from log file.
 while True:
     if done:
-        line = (logread.readLog())
+        line = (logread.readLog())        
+        if not line:
+            log("Log file rotated",toPrint=True)
+            logread.init(config.logreadFilename)
+            line=logread.readLog()
         parseLine(line)
     else:
         with open(config.logreadFilename,encoding="utf8") as logfile:
