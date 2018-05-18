@@ -7,11 +7,12 @@ import datetime
 import threading
 import time
 import os
-import json
+import signal
 
-import logread
 import abuseipdbCheck
+from logread import logread
 from config import config
+from iptables import iptables
 # Pattern definitions
 datePattern = "([0-9:\-\ ,]{23})" #First 23 characters of the log line
 IPPattern = ".*;oip=([0-9.]+);"
@@ -115,7 +116,8 @@ def blockIP(ipaddr,blockedDate,account):
         config.blockList.remove(ipaddrTuple)
     config.blockList.append((ipaddr,blockedDate))
     log("Blocked "+ipaddr+" for "+account,toPrint=config.printEvents)
-    #"iptables ...."
+    iptables.block(ipaddr)
+    time.sleep(0.02)
     return True
 def unblockIP(ipaddr):
     '''
@@ -129,7 +131,8 @@ def unblockIP(ipaddr):
     else:
         print("IP not in blocklist",ipaddr)
         return False
-    #Iptables..
+    iptables.unblock(ipaddr)
+    time.sleep(0.02)
     return True
 def checkBlock(ipaddr):
     '''
@@ -197,6 +200,9 @@ class BackgroundBlockCheck(object):
             checkRecentFailList()
             time.sleep(self.interval)
 config = config() #Load script configuration
+iptables = iptables(config.iptablesChain)
+logread = logread()
+logread.init(config.logreadFilename)
 recentFailList = []
 checker = BackgroundBlockCheck(interval = config.checkInterval) #Start background thread
 log("Launch")
@@ -216,7 +222,6 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
                 for event in account[1:]:
                     if not checkBlock(event[0]): #event[0] is an IP; event[1] the date when a login fail occured
                         blockIP(event[0],event[1],parsedAccount)
-                        return
     else:
         recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
 
@@ -250,18 +255,30 @@ def parseLine(line):
             log("ERROR: eventType parse failed",toPrint=config.printEvents)
             exit()
     return True
-
-#Testing the blockIP function
-#blockIP("1.1.1.1",datetime.datetime.now(),"admin@domain.tek")
-
+def graceful_exit():
+    global logread
+    global iptables
+    global checker
+    del iptables
+    del logread
+    del checker
+    exit()
+def signal_handler(signal, frame):
+    graceful_exit()
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 done=False #Change value to True, when initially finished reading from log file.
 while True:
     if done:
-        line = (logread.readLog())
+        line = (logread.readLog())        
+        if not line:
+            log("Log file rotated",toPrint=True)
+            logread.init(config.logreadFilename)
+            line=logread.readLog()
         parseLine(line)
     else:
-        with open(logread.filename,encoding="utf8") as logfile:
+        with open(config.logreadFilename,encoding="utf8") as logfile:
             for line in logfile:
                 parseLine(line.split('\n')[0])
             done=True

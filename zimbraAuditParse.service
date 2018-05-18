@@ -1,0 +1,11 @@
+[Unit]
+Description=Zimbra audit.log File Parser
+After=multi-user.target
+
+[Service]
+Type=idle
+WorkingDirectory=/<dir>/Abuser
+ExecStart= /<dir>/Abuser/zimbraAuditParse.py
+
+[Install]
+WantedBy=multi-user.target
