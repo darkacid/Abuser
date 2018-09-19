@@ -225,7 +225,7 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
     else:
         recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
 
-def eventSuccessOp():
+def eventSuccessOp(parsedIP,parsedAccount):
     #implement AbuseIPDB checks
     pass
 
