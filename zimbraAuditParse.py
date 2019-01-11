@@ -127,7 +127,6 @@ def unblockIP(ipaddr):
     if(ipaddrTuple):
         config.blockList.remove(ipaddrTuple)
         log("Unblocked "+ipaddr,toPrint=config.printEvents)
-        return True
     else:
         print("IP not in blocklist",ipaddr)
         return False
