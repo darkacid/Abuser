@@ -127,7 +127,6 @@ def unblockIP(ipaddr):
     if(ipaddrTuple):
         config.blockList.remove(ipaddrTuple)
         log("Unblocked "+ipaddr,toPrint=config.printEvents)
-        return True
     else:
         print("IP not in blocklist",ipaddr)
         return False
@@ -225,7 +224,7 @@ def eventListOp(parsedIP,parsedAccount,parsedDate):
     else:
         recentFailList.append([parsedAccount,(parsedIP,parsedDate)])
 
-def eventSuccessOp():
+def eventSuccessOp(parsedIP,parsedAccount):
     #implement AbuseIPDB checks
     pass
 

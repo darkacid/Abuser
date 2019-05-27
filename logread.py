@@ -13,18 +13,20 @@ class logread:
             exit()
         self.setFilename(logreadFilename)
         statinfo = os.stat(logreadFilename)
-        self.startSize = statinfo.st_size
+        self.firstSize = statinfo.st_size
     def follow(self,thefile):
         thefile.seek(0,2)
         while True:     
-            if self.startSize > os.stat(self.logreadFilename).st_size:
+            self.secondSize = os.stat(self.logreadFilename).st_size
+            if self.firstSize > self.secondSize:
                 return None
             line = thefile.readline()
+            self.firstSize = os.stat(self.logreadFilename).st_size
             if not line:
                 time.sleep(0.1)
                 continue
             yield line
-
+            
     def readLog(self):    
         logfile = open(self.logreadFilename,"r",encoding="utf8")
         loglines = self.follow(logfile)
